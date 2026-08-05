@@ -208,19 +208,36 @@
     transition: transform 0.15s;
   }
   .player-name-btn.is-open .expand-icon { transform: rotate(90deg); color: #f97316; }
-  .player-detail-row td {
+  .player-detail-row > td {
     padding: 0 !important;
     background: #162032 !important;
     text-align: left !important;
+    /* иначе tbody td:first-child { sticky } ломает внутренний pin */
+    position: relative !important;
+    left: auto !important;
+    z-index: auto !important;
   }
   .player-detail-row:hover > td { background: #162032 !important; }
+  /* Внутри широкой ячейки: липнет к левому краю .table-wrap при её скролле */
+  .player-games-pin {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    box-sizing: border-box;
+    background: #162032;
+  }
   .player-games-wrap {
-    padding: 10px 12px 14px 42px;
+    padding: 10px 12px 14px 0;
     overflow-x: auto;
+    max-width: 100%;
+    box-sizing: border-box;
+    -webkit-overflow-scrolling: touch;
   }
   .player-games-table {
-    width: 100%;
-    border-collapse: collapse;
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 12px;
     white-space: nowrap;
   }
@@ -231,23 +248,31 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    padding: 8px 8px;
+    padding: 1px 8px;
     text-align: center;
   }
-  .player-games-table th:first-child { text-align: left; }
+  .player-games-table th:first-child {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: #1e293b;
+  }
   .player-games-table td {
-    padding: 7px 8px;
+    padding: 1px 8px;
     text-align: center !important;
     color: #cbd5e1;
-    position: static !important;
-    background: transparent !important;
+    background: #162032 !important;
     font-weight: 400 !important;
-    left: auto !important;
   }
   .player-games-table td:first-child {
     text-align: left !important;
     color: #e2e8f0;
     font-weight: 500 !important;
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 2;
+    background: #162032 !important;
   }
   .player-games-empty {
     color: #64748b;
@@ -848,9 +873,10 @@ function renderShalashTable(games) {
     const nameBtn = `<button type="button" class="player-name-btn${isOpen ? ' is-open' : ''}" data-match-key="${escapeAttr(t.key)}" title="Статистика игроков матча"><span class="expand-icon">▸</span>${escapeHtml(t.name)}</button>`;
     const mainRow = `<tr class="match-row" data-match-key="${escapeAttr(t.key)}"><td><span class="rank ${rankClass(i)}">${i + 1}</span>${nameBtn}</td>${rowCells.join('')}</tr>`;
     if (!isOpen) return mainRow;
-    const detail = `<tr class="player-detail-row"><td colspan="${SHALASH_COLSPAN}"><div class="player-games-wrap">${renderNestedPlayerStats(sortNestedByKpi(t.players), 'Игрок')}</div></td></tr>`;
+    const detail = `<tr class="player-detail-row"><td colspan="${SHALASH_COLSPAN}"><div class="player-games-pin"><div class="player-games-wrap">${renderNestedPlayerStats(sortNestedByKpi(t.players), 'Игрок')}</div></div></td></tr>`;
     return mainRow + detail;
   }).join('');
+  syncPlayerGamesPinWidths();
 }
 
 function sortNestedByKpi(rows) {
@@ -1194,10 +1220,23 @@ function renderPlayersTable(teams) {
     const nameBtn = `<button type="button" class="player-name-btn${isOpen ? ' is-open' : ''}" data-player-key="${escapeAttr(t.key)}" title="Статистика по матчам"><span class="expand-icon">▸</span>${escapeHtml(t.name)}</button>`;
     const mainRow = `<tr class="player-row" data-player-key="${escapeAttr(t.key)}"><td><span class="rank ${rankClass(i)}">${i + 1}</span>${nameBtn}</td>${rowCells.join('')}</tr>`;
     if (!isOpen) return mainRow;
-    const detail = `<tr class="player-detail-row"><td colspan="${PLAYERS_COLSPAN}"><div class="player-games-wrap">${renderPlayerGameLogs(t.gameLogs)}</div></td></tr>`;
+    const detail = `<tr class="player-detail-row"><td colspan="${PLAYERS_COLSPAN}"><div class="player-games-pin"><div class="player-games-wrap">${renderPlayerGameLogs(t.gameLogs)}</div></div></td></tr>`;
     return mainRow + detail;
   }).join('');
+  syncPlayerGamesPinWidths();
 }
+
+function syncPlayerGamesPinWidths() {
+  document.querySelectorAll('.player-games-pin').forEach(pin => {
+    const wrap = pin.closest('.table-wrap');
+    if (!wrap) return;
+    const w = wrap.clientWidth;
+    pin.style.width = w + 'px';
+    pin.style.maxWidth = w + 'px';
+  });
+}
+
+window.addEventListener('resize', syncPlayerGamesPinWidths);
 
 function escapeHtml(str) {
   return String(str)

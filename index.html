@@ -358,7 +358,7 @@
   <div class="divider"></div>
 
   <h1 style="font-size:22px;margin-bottom:4px;">ШАЛАШ — статистика по матчам</h1>
-  <p class="subtitle">Группа 5 — показатели за каждый матч (данные: Widget/GetOnline)</p>
+  <p class="subtitle">Группа 5 — показатели за каждый матч · клик по матчу — статистика игроков</p>
   <div class="table-wrap">
     <table id="shalashTable">
       <thead>
@@ -459,7 +459,9 @@ let playersSortAsc = true;
 let currentPlayers = [];
 let playerGameLogs = new Map();
 let expandedPlayerKey = null;
+let expandedMatchKey = null;
 const PLAYERS_COLSPAN = 19;
+const SHALASH_COLSPAN = 18;
 
 function setStatus(text, cls) {
   const el = document.getElementById('status');
@@ -596,8 +598,10 @@ function parseOnlinePlayerGame(player, meta) {
   const shot2 = player.Shot2 || 0, goal2 = player.Goal2 || 0;
   const shot3 = player.Shot3 || 0, goal3 = player.Goal3 || 0;
   const shotOnPlay = (shot2 + shot3) ? ((goal2 + goal3) / (shot2 + shot3)) * 100 : null;
+  const matchLabel = `${meta.date} vs ${meta.opponent}${meta.score ? ` (${meta.score})` : ''}`;
   return {
-    match: `${meta.date} vs ${meta.opponent}`,
+    label: matchLabel,
+    match: matchLabel,
     score: meta.score,
     playedTime: parseNumericValue(player.PlayedTime) ?? parseNumericValue(player.Seconds),
     points: parseNumericValue(player.Points) ?? 0,
@@ -617,6 +621,21 @@ function parseOnlinePlayerGame(player, meta) {
     shot3Pct: parsePercentValue(player.Shot3Percent),
     shotOnPlay,
   };
+}
+
+function collectMatchPlayers(data, meta) {
+  const teams = data.GameTeams || [];
+  const shalash = teams.find(isShalashTeam);
+  if (!shalash) return [];
+  return (shalash.Players || [])
+    .filter(Boolean)
+    .map(player => {
+      const name = pickPlayerName(player);
+      if (!name || name === 'Без имени') return null;
+      const log = parseOnlinePlayerGame(player, meta);
+      return { ...log, label: name, name };
+    })
+    .filter(Boolean);
 }
 
 function collectPlayerGameLogsFromOnline(data, meta) {
@@ -657,10 +676,12 @@ function shotOnPlayFromOnline(team) {
   return (totalGoals / totalShots) * 100;
 }
 
-function parseOnlineGameTeam(team, meta, plusMinus, opponentPoints) {
+function parseOnlineGameTeam(team, meta, plusMinus, opponentPoints, players) {
   const label = `${meta.date} vs ${meta.opponent} (${meta.score})`;
   return {
     name: label,
+    key: 'game:' + meta.id,
+    players: players || [],
     avgPoints: team.Points,
     avgOpponentPoints: opponentPoints,
     avgPlusMinus: plusMinus,
@@ -793,7 +814,7 @@ function renderShalashTable(games) {
   const tbody = document.getElementById('shalashBody');
 
   if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="18" class="empty-msg">Нет данных</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${SHALASH_COLSPAN}" class="empty-msg">Нет данных</td></tr>`;
     return;
   }
 
@@ -823,8 +844,22 @@ function renderShalashTable(games) {
       const display = col === 'kpi' ? val : (val != null ? fmt(val) : '—');
       return `<td class="${cls}">${display}</td>`;
     });
-    return `<tr><td><span class="rank ${rankClass(i)}">${i + 1}</span>${t.name}</td>${rowCells.join('')}</tr>`;
+    const isOpen = expandedMatchKey === t.key;
+    const nameBtn = `<button type="button" class="player-name-btn${isOpen ? ' is-open' : ''}" data-match-key="${escapeAttr(t.key)}" title="Статистика игроков матча"><span class="expand-icon">▸</span>${escapeHtml(t.name)}</button>`;
+    const mainRow = `<tr class="match-row" data-match-key="${escapeAttr(t.key)}"><td><span class="rank ${rankClass(i)}">${i + 1}</span>${nameBtn}</td>${rowCells.join('')}</tr>`;
+    if (!isOpen) return mainRow;
+    const detail = `<tr class="player-detail-row"><td colspan="${SHALASH_COLSPAN}"><div class="player-games-wrap">${renderNestedPlayerStats(sortNestedByKpi(t.players), 'Игрок')}</div></td></tr>`;
+    return mainRow + detail;
   }).join('');
+}
+
+function sortNestedByKpi(rows) {
+  return [...(rows || [])].sort((a, b) => (b.kpi || 0) - (a.kpi || 0));
+}
+
+function toggleMatchExpand(matchKey) {
+  expandedMatchKey = expandedMatchKey === matchKey ? null : matchKey;
+  renderShalashTable(currentShalashGames);
 }
 
 function handleShalashSort(col) {
@@ -855,8 +890,9 @@ async function loadShalashGames() {
       if (!shalash) throw new Error('Команда не найдена');
       const opponent = teams.find(t => t !== shalash);
       const plusMinus = opponent ? shalash.Score - opponent.Score : null;
-	  const opponentPoints = opponent ? opponent.Score : null;
-      games.push(parseOnlineGameTeam(shalash, meta, plusMinus, opponentPoints));
+      const opponentPoints = opponent ? opponent.Score : null;
+      const matchPlayers = collectMatchPlayers(data, meta);
+      games.push(parseOnlineGameTeam(shalash, meta, plusMinus, opponentPoints, matchPlayers));
       collectPlayerGameLogsFromOnline(data, meta);
     } catch (e) {
       console.warn(`Ошибка загрузки матча ШАЛАШ ${meta.id}:`, e.message);
@@ -864,10 +900,11 @@ async function loadShalashGames() {
   }
 
   if (games.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="18" class="empty-msg">Ошибка загрузки данных по матчам ШАЛАШ</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${SHALASH_COLSPAN}" class="empty-msg">Ошибка загрузки данных по матчам ШАЛАШ</td></tr>`;
     return;
   }
 
+  expandedMatchKey = null;
   shalashSortCol = 'name';
   shalashSortAsc = true;
   updateShalashSortArrows('name');
@@ -1054,14 +1091,14 @@ function updatePlayersSortArrows(col) {
   });
 }
 
-function renderPlayerGameLogs(gameLogs) {
-  if (!gameLogs || gameLogs.length === 0) {
-    return '<div class="player-games-empty">Нет данных по отдельным матчам</div>';
+function renderNestedPlayerStats(rows, firstHeader) {
+  if (!rows || rows.length === 0) {
+    return '<div class="player-games-empty">Нет данных по игрокам</div>';
   }
 
-  const rows = gameLogs.map(g => {
+  const body = rows.map(g => {
     const cells = [
-      `${g.match}${g.score ? ` (${g.score})` : ''}`,
+      g.label || g.name || g.match || '—',
       formatPlayedTime(g.playedTime),
       fmt(g.points),
       fmt(g.rebound),
@@ -1086,7 +1123,7 @@ function renderPlayerGameLogs(gameLogs) {
   return `<table class="player-games-table">
     <thead>
       <tr>
-        <th>Матч</th>
+        <th>${firstHeader}</th>
         <th>Время</th>
         <th>Очки</th>
         <th>Подб.</th>
@@ -1106,8 +1143,15 @@ function renderPlayerGameLogs(gameLogs) {
         <th>С игры</th>
       </tr>
     </thead>
-    <tbody>${rows}</tbody>
+    <tbody>${body}</tbody>
   </table>`;
+}
+
+function renderPlayerGameLogs(gameLogs) {
+  if (!gameLogs || gameLogs.length === 0) {
+    return '<div class="player-games-empty">Нет данных по отдельным матчам</div>';
+  }
+  return renderNestedPlayerStats(gameLogs, 'Матч');
 }
 
 function renderPlayersTable(teams) {
@@ -1327,6 +1371,13 @@ loadData();
   const table = document.getElementById('shalashTable');
   if (!table) return;
   table.addEventListener('click', function(e) {
+    const matchBtn = e.target.closest('.player-name-btn[data-match-key]');
+    if (matchBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleMatchExpand(matchBtn.dataset.matchKey);
+      return;
+    }
     const th = e.target.closest('th.sortable');
     if (!th) return;
     handleShalashSort(th.dataset.col);
@@ -1337,7 +1388,7 @@ loadData();
   const table = document.getElementById('playersTable');
   if (!table) return;
   table.addEventListener('click', function(e) {
-    const nameBtn = e.target.closest('.player-name-btn');
+    const nameBtn = e.target.closest('.player-name-btn[data-player-key]');
     if (nameBtn) {
       e.preventDefault();
       e.stopPropagation();

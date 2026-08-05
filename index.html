@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -117,13 +117,9 @@
   }
   tbody tr { transition: background 0.15s; }
   tbody tr:hover { background: #283548; }
-  tbody tr:nth-child(1) { border-top: 2px solid #fbbf24; }
-  tbody tr:nth-child(2) { border-top: 2px solid #d4d4d4; }
-  tbody tr:nth-child(3) { border-top: 2px solid #cd7f32; }
   tbody td {
     padding: 11px 10px;
     text-align: center;
-    border-bottom: 1px solid #1e2d3d;
     font-variant-numeric: tabular-nums;
   }
   tbody td:first-child {
@@ -139,9 +135,6 @@
   tbody tr:hover td:first-child {
     background: #283548;
   }
-  tbody tr:nth-child(1) td:first-child { color: #fbbf24; }
-  tbody tr:nth-child(2) td:first-child { color: #e2e8f0; }
-  tbody tr:nth-child(3) td:first-child { color: #d4a056; }
   .rank {
     display: inline-block;
     width: 22px; height: 22px;
@@ -153,10 +146,7 @@
     margin-right: 8px;
     vertical-align: middle;
   }
-  .rank-1 { background: #fbbf24; color: #0f172a; }
-  .rank-2 { background: #d4d4d4; color: #0f172a; }
-  .rank-3 { background: #cd7f32; color: #0f172a; }
-  .rank-n { background: #334155; color: #94a3b8; }
+  .rank-1, .rank-2, .rank-3, .rank-n { background: #334155; color: #94a3b8; }
   .pos { color: #22c55e; }
   .neg { color: #ef4444; }
   .neu { color: #e2e8f0; }
@@ -198,6 +188,72 @@
   }
   .best-val { color: #22c55e !important; font-weight: 700; }
   .worst-val { color: #ef4444 !important; font-weight: 700; }
+  .player-name-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+  }
+  .player-name-btn:hover { color: #f97316; }
+  .player-name-btn .expand-icon {
+    display: inline-block;
+    width: 1em;
+    margin-right: 2px;
+    color: #94a3b8;
+    font-size: 10px;
+    transition: transform 0.15s;
+  }
+  .player-name-btn.is-open .expand-icon { transform: rotate(90deg); color: #f97316; }
+  .player-detail-row td {
+    padding: 0 !important;
+    background: #162032 !important;
+    text-align: left !important;
+  }
+  .player-detail-row:hover > td { background: #162032 !important; }
+  .player-games-wrap {
+    padding: 10px 12px 14px 42px;
+    overflow-x: auto;
+  }
+  .player-games-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .player-games-table th {
+    background: #1e293b;
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 8px 8px;
+    text-align: center;
+  }
+  .player-games-table th:first-child { text-align: left; }
+  .player-games-table td {
+    padding: 7px 8px;
+    text-align: center !important;
+    color: #cbd5e1;
+    position: static !important;
+    background: transparent !important;
+    font-weight: 400 !important;
+    left: auto !important;
+  }
+  .player-games-table td:first-child {
+    text-align: left !important;
+    color: #e2e8f0;
+    font-weight: 500 !important;
+  }
+  .player-games-empty {
+    color: #64748b;
+    font-size: 13px;
+    padding: 12px 0;
+  }
 
   @media (max-width: 480px) {
     body {
@@ -336,7 +392,7 @@
   <div class="divider"></div>
 
   <h1 style="font-size:22px;margin-bottom:4px;">ШАЛАШ — статистика по игрокам</h1>
-  <p class="subtitle">Средние показатели за каждый матч (агрегировано по всем играм группы 5)</p>
+  <p class="subtitle">Средние показатели · клик по имени — статистика по матчам</p>
   <div class="table-wrap">
     <table id="playersTable">
       <thead>
@@ -363,7 +419,7 @@
         </tr>
       </thead>
       <tbody id="playersBody">
-        <tr><td colspan="17" class="empty-msg">Загрузка...</td></tbody>
+        <tr><td colspan="19" class="empty-msg">Загрузка...</td></tr>
       </tbody>
     </table>
   </div>
@@ -401,6 +457,9 @@ let currentShalashGames = [];
 let playersSortCol = 'name';
 let playersSortAsc = true;
 let currentPlayers = [];
+let playerGameLogs = new Map();
+let expandedPlayerKey = null;
+const PLAYERS_COLSPAN = 19;
 
 function setStatus(text, cls) {
   const el = document.getElementById('status');
@@ -494,9 +553,101 @@ function parsePct(val) {
 }
 
 function computeKpi(team) {
-  const miss = (team.Shot2 - team.Goal2) + (team.Shot3 - team.Goal3) + (team.Shot1 - team.Goal1);
-  return team.Points + team.Rebound + team.Assist + team.Steal + (team.Blocks || 0)
-    + team.OpponentFoul - miss - team.Turnover - team.Foul;
+  const shot1 = team.Shot1 || 0, goal1 = team.Goal1 || 0;
+  const shot2 = team.Shot2 || 0, goal2 = team.Goal2 || 0;
+  const shot3 = team.Shot3 || 0, goal3 = team.Goal3 || 0;
+  const miss = (shot2 - goal2) + (shot3 - goal3) + (shot1 - goal1);
+  return (team.Points || 0) + (team.Rebound || 0) + (team.Assist || 0) + (team.Steal || 0) + (team.Blocks || 0)
+    + (team.OpponentFoul || 0) - miss - (team.Turnover || 0) - (team.Foul || 0);
+}
+
+function normalizePlayerName(name) {
+  return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function nameMatchKey(name) {
+  return normalizePlayerName(name).split(' ').filter(Boolean).sort().join(' ');
+}
+
+function makePlayerKey(personId, name) {
+  if (personId != null && personId !== '' && Number(personId) !== 0) return 'id:' + personId;
+  return 'name:' + normalizePlayerName(name);
+}
+
+function addPlayerGameLog(personId, name, log) {
+  const idKey = (personId != null && personId !== '' && Number(personId) !== 0) ? 'id:' + personId : null;
+  const nameKey = 'name:' + normalizePlayerName(name);
+  const tokensKey = 'tokens:' + nameMatchKey(name);
+  let arr = (idKey && playerGameLogs.get(idKey)) || playerGameLogs.get(nameKey) || playerGameLogs.get(tokensKey);
+  if (!arr) {
+    arr = [];
+    if (idKey) playerGameLogs.set(idKey, arr);
+    if (nameKey !== 'name:') playerGameLogs.set(nameKey, arr);
+    if (tokensKey !== 'tokens:') playerGameLogs.set(tokensKey, arr);
+  } else {
+    if (idKey && !playerGameLogs.has(idKey)) playerGameLogs.set(idKey, arr);
+    if (nameKey !== 'name:' && !playerGameLogs.has(nameKey)) playerGameLogs.set(nameKey, arr);
+    if (tokensKey !== 'tokens:' && !playerGameLogs.has(tokensKey)) playerGameLogs.set(tokensKey, arr);
+  }
+  arr.push(log);
+}
+
+function parseOnlinePlayerGame(player, meta) {
+  const shot2 = player.Shot2 || 0, goal2 = player.Goal2 || 0;
+  const shot3 = player.Shot3 || 0, goal3 = player.Goal3 || 0;
+  const shotOnPlay = (shot2 + shot3) ? ((goal2 + goal3) / (shot2 + shot3)) * 100 : null;
+  return {
+    match: `${meta.date} vs ${meta.opponent}`,
+    score: meta.score,
+    playedTime: parseNumericValue(player.PlayedTime) ?? parseNumericValue(player.Seconds),
+    points: parseNumericValue(player.Points) ?? 0,
+    rebound: parseNumericValue(player.Rebound) ?? 0,
+    defRebound: parseNumericValue(player.DefRebound) ?? 0,
+    offRebound: parseNumericValue(player.OffRebound) ?? 0,
+    assist: parseNumericValue(player.Assist) ?? 0,
+    steal: parseNumericValue(player.Steal) ?? 0,
+    block: parseNumericValue(player.Blocks) ?? 0,
+    turnover: parseNumericValue(player.Turnover) ?? 0,
+    foul: parseNumericValue(player.Foul) ?? 0,
+    oppFoul: parseNumericValue(player.OpponentFoul) ?? 0,
+    kpi: computeKpi(player),
+    plusMinus: parseNumericValue(player.PlusMinus),
+    shot1Pct: parsePercentValue(player.Shot1Percent),
+    shot2Pct: parsePercentValue(player.Shot2Percent),
+    shot3Pct: parsePercentValue(player.Shot3Percent),
+    shotOnPlay,
+  };
+}
+
+function collectPlayerGameLogsFromOnline(data, meta) {
+  const teams = data.GameTeams || [];
+  const shalash = teams.find(isShalashTeam);
+  if (!shalash) return;
+  const rawPlayers = shalash.Players || [];
+  for (const player of rawPlayers) {
+    if (!player) continue;
+    const name = pickPlayerName(player);
+    if (!name || name === 'Без имени') continue;
+    addPlayerGameLog(player.PersonID ?? player.PersonId, name, parseOnlinePlayerGame(player, meta));
+  }
+}
+
+function lookupPlayerGameLogs(player) {
+  if (player.personId != null && player.personId !== '' && Number(player.personId) !== 0) {
+    const byId = playerGameLogs.get('id:' + player.personId);
+    if (byId) return byId;
+  }
+  return playerGameLogs.get('name:' + normalizePlayerName(player.name))
+    || playerGameLogs.get('tokens:' + nameMatchKey(player.name))
+    || [];
+}
+
+function attachPlayerGameLogs(players) {
+  return players.map(player => ({
+    ...player,
+    key: makePlayerKey(player.personId, player.name),
+    gameLogs: lookupPlayerGameLogs(player),
+  }));
 }
 
 function shotOnPlayFromOnline(team) {
@@ -691,6 +842,7 @@ function handleShalashSort(col) {
 async function loadShalashGames() {
   const tbody = document.getElementById('shalashBody');
   const games = [];
+  playerGameLogs = new Map();
 
   for (const meta of SHALASH_GAMES) {
     try {
@@ -705,6 +857,7 @@ async function loadShalashGames() {
       const plusMinus = opponent ? shalash.Score - opponent.Score : null;
 	  const opponentPoints = opponent ? opponent.Score : null;
       games.push(parseOnlineGameTeam(shalash, meta, plusMinus, opponentPoints));
+      collectPlayerGameLogsFromOnline(data, meta);
     } catch (e) {
       console.warn(`Ошибка загрузки матча ШАЛАШ ${meta.id}:`, e.message);
     }
@@ -741,13 +894,16 @@ function parsePercentValue(val) {
 function pickPlayerName(player) {
   const info = player.PersonInfo || player.Person || {};
   const candidates = [
+    player.PersonNameRu,
     player.PersonName2,
     player.PersonName1,
     player.PersonName,
+    player.PersonNameEn,
     player.PlayerName,
     player.Name,
     player.FullName,
     player.DisplayName,
+    info.PersonNameRu,
     info.PersonName2,
     info.PersonName1,
     info.PersonName,
@@ -757,6 +913,8 @@ function pickPlayerName(player) {
     info.DisplayName,
     info.PersonFullNameRu,
     info.PersonFullNameEn,
+    info.PersonFirstNameRu && info.PersonLastNameRu ? `${info.PersonLastNameRu} ${info.PersonFirstNameRu}`.trim() : null,
+    player.LastNameRu && player.FirstNameRu ? `${player.LastNameRu} ${player.FirstNameRu}`.trim() : null,
     info.PersonFirstNameRu && info.PersonLastNameRu ? `${info.PersonFirstNameRu} ${info.PersonLastNameRu}`.trim() : null,
     info.PersonFirstNameEn && info.PersonLastNameEn ? `${info.PersonFirstNameEn} ${info.PersonLastNameEn}`.trim() : null,
   ];
@@ -814,6 +972,7 @@ function parsePlayerStatsFromPreview(data, shalashTeamID) {
     .filter(Boolean)
     .map(player => ({
       name: pickPlayerName(player),
+      personId: player.PersonID ?? player.PersonId ?? (player.PersonInfo && player.PersonInfo.PersonID) ?? null,
       games: parseNumericValue(player.GameCount) ?? parseNumericValue(player.Games) ?? parseNumericValue(player.Matches) ?? 0,
       avgPlayedTime: parseNumericValue(player.AvgPlayedTime) ?? parseNumericValue(player.PlayedTime),
       avgPoints: parseNumericValue(player.AvgPoints) ?? parseNumericValue(player.Points),
@@ -867,11 +1026,12 @@ async function loadPlayerStats() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
-    const players = parsePlayerStatsFromPreview(data, SHALASH_TEAM_ID);
+    const players = attachPlayerGameLogs(parsePlayerStatsFromPreview(data, SHALASH_TEAM_ID));
     currentPlayers = players;
+    expandedPlayerKey = null;
 
     if (players.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="17" class="empty-msg">Нет данных по игрокам ШАЛАШ</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="${PLAYERS_COLSPAN}" class="empty-msg">Нет данных по игрокам ШАЛАШ</td></tr>`;
       return;
     }
 
@@ -881,7 +1041,7 @@ async function loadPlayerStats() {
     renderPlayersTable(players);
   } catch (e) {
     currentPlayers = [];
-    tbody.innerHTML = '<tr><td colspan="17" class="empty-msg">Не удалось загрузить данные по игрокам ШАЛАШ</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${PLAYERS_COLSPAN}" class="empty-msg">Не удалось загрузить данные по игрокам ШАЛАШ</td></tr>`;
     console.warn('Ошибка загрузки игроков ШАЛАШ:', e.message);
   }
 }
@@ -894,12 +1054,68 @@ function updatePlayersSortArrows(col) {
   });
 }
 
+function renderPlayerGameLogs(gameLogs) {
+  if (!gameLogs || gameLogs.length === 0) {
+    return '<div class="player-games-empty">Нет данных по отдельным матчам</div>';
+  }
+
+  const rows = gameLogs.map(g => {
+    const cells = [
+      `${g.match}${g.score ? ` (${g.score})` : ''}`,
+      formatPlayedTime(g.playedTime),
+      fmt(g.points),
+      fmt(g.rebound),
+      fmt(g.defRebound),
+      fmt(g.offRebound),
+      fmt(g.assist),
+      fmt(g.steal),
+      fmt(g.block),
+      fmt(g.turnover),
+      fmt(g.foul),
+      fmt(g.oppFoul),
+      fmt(g.kpi),
+      g.plusMinus == null ? '—' : fmtDiff(g.plusMinus),
+      g.shot1Pct == null ? '—' : fmtPct(g.shot1Pct),
+      g.shot2Pct == null ? '—' : fmtPct(g.shot2Pct),
+      g.shot3Pct == null ? '—' : fmtPct(g.shot3Pct),
+      g.shotOnPlay == null ? '—' : fmtPct(g.shotOnPlay),
+    ];
+    return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`;
+  }).join('');
+
+  return `<table class="player-games-table">
+    <thead>
+      <tr>
+        <th>Матч</th>
+        <th>Время</th>
+        <th>Очки</th>
+        <th>Подб.</th>
+        <th>Защ</th>
+        <th>Нап</th>
+        <th>Асс</th>
+        <th>Пер</th>
+        <th>Блк</th>
+        <th>Пот</th>
+        <th>Фол</th>
+        <th>Ч.фол</th>
+        <th>KPI</th>
+        <th>+/-</th>
+        <th>1%</th>
+        <th>2%</th>
+        <th>3%</th>
+        <th>С игры</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function renderPlayersTable(teams) {
   const sorted = sortData(teams, playersSortCol, playersSortAsc);
   const tbody = document.getElementById('playersBody');
 
   if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="16" class="empty-msg">Нет данных</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${PLAYERS_COLSPAN}" class="empty-msg">Нет данных</td></tr>`;
     return;
   }
 
@@ -930,8 +1146,30 @@ function renderPlayersTable(teams) {
       const displayValue = col === 'avgPlayedTime' ? formatPlayedTime(val) : (val != null ? fmt(val) : '—');
       return `<td class="${cls}">${displayValue}</td>`;
     });
-    return `<tr><td><span class="rank ${rankClass(i)}">${i + 1}</span>${t.name}</td>${rowCells.join('')}</tr>`;
+    const isOpen = expandedPlayerKey === t.key;
+    const nameBtn = `<button type="button" class="player-name-btn${isOpen ? ' is-open' : ''}" data-player-key="${escapeAttr(t.key)}" title="Статистика по матчам"><span class="expand-icon">▸</span>${escapeHtml(t.name)}</button>`;
+    const mainRow = `<tr class="player-row" data-player-key="${escapeAttr(t.key)}"><td><span class="rank ${rankClass(i)}">${i + 1}</span>${nameBtn}</td>${rowCells.join('')}</tr>`;
+    if (!isOpen) return mainRow;
+    const detail = `<tr class="player-detail-row"><td colspan="${PLAYERS_COLSPAN}"><div class="player-games-wrap">${renderPlayerGameLogs(t.gameLogs)}</div></td></tr>`;
+    return mainRow + detail;
   }).join('');
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/'/g, '&#39;');
+}
+
+function togglePlayerExpand(playerKey) {
+  expandedPlayerKey = expandedPlayerKey === playerKey ? null : playerKey;
+  renderPlayersTable(currentPlayers);
 }
 
 function handlePlayersSort(col) {
@@ -1099,6 +1337,13 @@ loadData();
   const table = document.getElementById('playersTable');
   if (!table) return;
   table.addEventListener('click', function(e) {
+    const nameBtn = e.target.closest('.player-name-btn');
+    if (nameBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePlayerExpand(nameBtn.dataset.playerKey);
+      return;
+    }
     const th = e.target.closest('th.sortable');
     if (!th) return;
     handlePlayersSort(th.dataset.col);

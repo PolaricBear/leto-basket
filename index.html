@@ -1,0 +1,1109 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Средние показатели команд — Турнир по баскетболу</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 32px 16px;
+    min-height: 100vh;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  h1 {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    background: linear-gradient(135deg, #f97316, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    text-align: center;
+    color: #64748b;
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+  .toolbar {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .btn-refresh {
+    background: linear-gradient(135deg, #f97316, #f59e0b);
+    color: #0f172a;
+    border: none;
+    padding: 10px 28px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .btn-refresh:hover { opacity: 0.85; transform: scale(1.03); }
+  .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .status {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 13px;
+    min-height: 20px;
+  }
+  .status.loading { color: #f59e0b; }
+  .status.error { color: #ef4444; }
+  .status.done { color: #22c55e; }
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 16px;
+    background: #1e293b;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.3);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  thead th {
+    background: #334155;
+    color: #f97316;
+    font-weight: 600;
+    padding: 12px 10px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    border-bottom: 2px solid #f97316;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  thead th:first-child {
+    text-align: left;
+    padding-left: 20px;
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: #334155;
+  }
+  thead th.sortable {
+    cursor: pointer;
+    user-select: none;
+  }
+  thead th.sortable:hover {
+    background: #475569;
+  }
+  thead th .sort-arrow {
+    display: inline-block;
+    margin-left: 4px;
+    opacity: 0.4;
+    font-size: 10px;
+  }
+  thead th.active-sort .sort-arrow {
+    opacity: 1;
+    color: #f97316;
+  }
+  thead th .sub {
+    display: block;
+    color: #94a3b8;
+    font-weight: 400;
+    font-size: 10px;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-top: 2px;
+  }
+  tbody tr { transition: background 0.15s; }
+  tbody tr:hover { background: #283548; }
+  tbody tr:nth-child(1) { border-top: 2px solid #fbbf24; }
+  tbody tr:nth-child(2) { border-top: 2px solid #d4d4d4; }
+  tbody tr:nth-child(3) { border-top: 2px solid #cd7f32; }
+  tbody td {
+    padding: 11px 10px;
+    text-align: center;
+    border-bottom: 1px solid #1e2d3d;
+    font-variant-numeric: tabular-nums;
+  }
+  tbody td:first-child {
+    text-align: left;
+    padding-left: 20px;
+    font-weight: 600;
+    color: #f1f5f9;
+    position: sticky;
+    left: 0;
+    background: #1e293b;
+    z-index: 1;
+  }
+  tbody tr:hover td:first-child {
+    background: #283548;
+  }
+  tbody tr:nth-child(1) td:first-child { color: #fbbf24; }
+  tbody tr:nth-child(2) td:first-child { color: #e2e8f0; }
+  tbody tr:nth-child(3) td:first-child { color: #d4a056; }
+  .rank {
+    display: inline-block;
+    width: 22px; height: 22px;
+    line-height: 22px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .rank-1 { background: #fbbf24; color: #0f172a; }
+  .rank-2 { background: #d4d4d4; color: #0f172a; }
+  .rank-3 { background: #cd7f32; color: #0f172a; }
+  .rank-n { background: #334155; color: #94a3b8; }
+  .pos { color: #22c55e; }
+  .neg { color: #ef4444; }
+  .neu { color: #e2e8f0; }
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #334155, transparent);
+    margin: 24px 0 16px;
+  }
+  .sections {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+  .card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 16px 20px;
+    border-left: 3px solid #334155;
+  }
+  .card h3 {
+    font-size: 14px;
+    color: #f97316;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+  .card ul {
+    list-style: none;
+    font-size: 13px;
+    color: #cbd5e1;
+  }
+  .card li { padding: 3px 0; }
+  .card li strong { color: #f1f5f9; }
+  .empty-msg {
+    text-align: center;
+    padding: 60px 20px;
+    color: #64748b;
+    font-size: 15px;
+  }
+  .best-val { color: #22c55e !important; font-weight: 700; }
+  .worst-val { color: #ef4444 !important; font-weight: 700; }
+
+  @media (max-width: 480px) {
+    body {
+      padding: 16px 8px;
+    }
+    .container {
+      max-width: 100%;
+    }
+    h1 {
+      font-size: 22px;
+      line-height: 1.2;
+    }
+    .subtitle {
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    .btn-refresh {
+      width: 100%;
+      max-width: 280px;
+      padding: 10px 16px;
+      font-size: 13px;
+    }
+    .table-wrap {
+      border-radius: 10px;
+      -webkit-overflow-scrolling: touch;
+    }
+    table {
+      font-size: 12px;
+    }
+    thead th {
+      padding: 10px 6px;
+      font-size: 9px;
+    }
+    tbody td {
+      padding: 8px 6px;
+      font-size: 12px;
+    }
+    tbody td:first-child {
+      padding-left: 10px;
+      white-space: normal;
+      line-height: 1.2;
+      max-width: 120px;
+      min-width: 90px;
+    }
+    #shalashTable tbody td:first-child,
+    #playersTable tbody td:first-child {
+      max-width: 110px;
+      min-width: 90px;
+      white-space: normal;
+      word-break: break-word;
+    }
+    .rank {
+      width: 20px;
+      height: 20px;
+      line-height: 20px;
+      font-size: 10px;
+      margin-right: 6px;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Средние показатели команд</h1>
+  <p class="subtitle">Турнир по баскетболу — статистика за все матчи</p>
+
+  <div class="toolbar">
+    <button class="btn-refresh" id="refreshBtn" onclick="loadData()">🔄 Обновить данные</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <div class="table-wrap">
+    <table id="statsTable">
+      <thead>
+        <tr>
+          <th class="sortable" data-col="name">Команда <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="games">Матчи <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgPoints">Очки <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgRebound">Подборы <span class="sub">общ</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgDefRebound">Подборы <span class="sub">защ</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgOffRebound">Подборы <span class="sub">нап</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgAssist">Ассисты <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgSteal">Перехваты <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgBlock">Блокшоты <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgTurnover">Потери <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgFoul">Фолы <span class="sub">свои</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgOppFoul">Фолы <span class="sub">чужие</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgPlusMinus">+/- <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="kpi">KPI <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shot1Pct">1-очк. <span class="sub">%</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shot2Pct">2-очк. <span class="sub">%</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shot3Pct">3-очк. <span class="sub">%</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shotOnPlay">Броски <span class="sub">с игры</span> <span class="sort-arrow">⇅</span></th>
+        </tr>
+      </thead>
+      <tbody id="statsBody">
+        <tr><td colspan="18" class="empty-msg">Нажмите «Обновить данные» для загрузки статистики</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="divider"></div>
+
+  <h1 style="font-size:22px;margin-bottom:4px;">ШАЛАШ — статистика по матчам</h1>
+  <p class="subtitle">Группа 5 — показатели за каждый матч (данные: Widget/GetOnline)</p>
+  <div class="table-wrap">
+    <table id="shalashTable">
+      <thead>
+        <tr>
+          <th class="sortable" data-col="name" data-table="shalash">Матч <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgPoints" data-table="shalash">Очки <span class="sub">забили</span> <span class="sort-arrow">⇅</span></th>          
+		  <th class="sortable" data-col="avgOpponentPoints" data-table="shalash">Очки <span class="sub">пропустили</span> <span class="sort-arrow">⇅</span></th>
+		  <th class="sortable" data-col="avgPlusMinus" data-table="shalash">Разница <span class="sub">очков</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgRebound" data-table="shalash">Подборы <span class="sub">всего</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgDefRebound" data-table="shalash">Подборы <span class="sub">защ</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgOffRebound" data-table="shalash">Подборы <span class="sub">нап</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgAssist" data-table="shalash">Ассисты <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgSteal" data-table="shalash">Перехваты <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgBlock" data-table="shalash">Блокшоты <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgTurnover" data-table="shalash">Потери <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgFoul" data-table="shalash">Фолы <span class="sub">свои</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgOppFoul" data-table="shalash">Фолы <span class="sub">чужие</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="kpi" data-table="shalash">KPI <span class="sub">коэфф.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shot1Pct" data-table="shalash">1-очк. <span class="sub">%</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shot2Pct" data-table="shalash">2-очк. <span class="sub">%</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shot3Pct" data-table="shalash">3-очк. <span class="sub">%</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shotOnPlay" data-table="shalash">Броски <span class="sub">с игры</span> <span class="sort-arrow">⇅</span></th>
+        </tr>
+      </thead>
+      <tbody id="shalashBody">
+        <tr><td colspan="18" class="empty-msg">Загрузка...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="divider"></div>
+
+  <h1 style="font-size:22px;margin-bottom:4px;">ШАЛАШ — статистика по игрокам</h1>
+  <p class="subtitle">Средние показатели за каждый матч (агрегировано по всем играм группы 5)</p>
+  <div class="table-wrap">
+    <table id="playersTable">
+      <thead>
+        <tr>
+          <th class="sortable" data-col="name" data-table="players">Игрок <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="games" data-table="players">Матчи <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgPlayedTime" data-table="players">Время <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgPoints" data-table="players">Очки <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgRebound" data-table="players">Подборы <span class="sub">всего</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgDefRebound" data-table="players">Подборы <span class="sub">защ</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgOffRebound" data-table="players">Подборы <span class="sub">нап</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgAssist" data-table="players">Ассисты <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgSteal" data-table="players">Перехваты <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgBlock" data-table="players">Блокшоты <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgTurnover" data-table="players">Потери <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgFoul" data-table="players">Фолы <span class="sub">свои</span> <span class="sort-arrow">⇅</span></th>          
+		  <th class="sortable" data-col="AvgOpponentFoul" data-table="players">Фолы <span class="sub">чужие</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgKPI" data-table="players">KPI <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="avgPlusMinus" data-table="players">+/- <span class="sub">средн.</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shot1Pct" data-table="players">1-очк. <span class="sub">%</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shot2Pct" data-table="players">2-очк. <span class="sub">%</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shot3Pct" data-table="players">3-очк. <span class="sub">%</span> <span class="sort-arrow">⇅</span></th>
+          <th class="sortable" data-col="shotOnPlay" data-table="players">Броски <span class="sub">с игры</span> <span class="sort-arrow">⇅</span></th>
+        </tr>
+      </thead>
+      <tbody id="playersBody">
+        <tr><td colspan="17" class="empty-msg">Загрузка...</td></tbody>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="sections" id="insights"></div>
+</div>
+
+<script>
+const GAME_IDS = [1076626, 1079252, 1074549, 1074173, 1073058, 1074548, 1072222, 1075324];
+const LAST_GAME_ID = GAME_IDS[GAME_IDS.length - 1];
+const API_BASE = 'https://reg.infobasket.su/Comp/GetTeamStatsForPreview';
+const SHALASH_ONLINE_BASE = 'https://reg.infobasket.su/Widget/GetOnline';
+const SHALASH_TEAM_ID = 78494;
+const SHALASH_GAMES = [
+  { id: 1072222, date: '06.13', opponent: 'Арман', score: '63:56' },
+  { id: 1073057, date: '06.21', opponent: 'БК Нарва', score: '55:40' },
+  { id: 1074549, date: '06.28', opponent: '30 FPS', score: '56:53' },
+  { id: 1075324, date: '07.04', opponent: 'Короли Севера', score: '61:54' },
+  { id: 1076632, date: '07.12', opponent: 'Тосно-Юноши', score: '67:70' },
+  { id: 1078446, date: '07.22', opponent: 'IT Basket', score: '61:29' },
+  { id: 1075317, date: '07.26', opponent: 'Октавия', score: '59:68' },
+  { id: 1079239, date: '07.29', opponent: 'АБЗ-1', score: '57:77' },
+  { id: 1079251, date: '08.02', opponent: 'Драконы', score: '67:44' },
+  { id: 1080460, date: '08.04', opponent: 'Арман', score: '90:70' },
+];
+
+let sortCol = 'kpi';
+let sortAsc = false;
+let currentTeams = [];
+let shalashSortCol = 'name';
+let shalashSortAsc = true;
+let currentShalashGames = [];
+let playersSortCol = 'name';
+let playersSortAsc = true;
+let currentPlayers = [];
+
+function setStatus(text, cls) {
+  const el = document.getElementById('status');
+  el.textContent = text;
+  el.className = 'status ' + (cls || '');
+}
+
+function getName(team) {
+  const tn = team.TeamName;
+  if (typeof tn === 'string') return tn;
+  if (tn && tn.CompTeamShortNameRu) return tn.CompTeamShortNameRu;
+  if (tn && tn.TeamName) return tn.TeamName;
+  return tn || 'Без имени';
+}
+
+function avg(team, key) {
+  const val = team['Avg' + key];
+  if (val == null) return null;
+  if (typeof val === 'number') return val;
+  return parseFloat(val.replace(',', '.'));
+}
+
+function shotPct(team, key) {
+  const val = team['Shot' + key + 'Percent'];
+  if (val == null) return null;
+  if (typeof val === 'number') return val;
+  return parseFloat(val.replace(',', '.'));
+}
+
+function shotOnPlay(team) {
+  const totalGoals = team.Goal23 || 0;
+  const totalShots = team.Shot23 || 0;
+  if (!totalShots || !totalGoals) return null;
+  return (totalGoals / totalShots) * 100;
+}
+
+function fmt(num) {
+  if (num == null) return '—';
+  return num % 1 === 0 ? num.toString() : num.toFixed(1);
+}
+
+function fmtPct(num) {
+  if (num == null) return '—';
+  return num.toFixed(1);
+}
+
+function fmtDiff(num) {
+  if (num == null) return '—';
+  return num > 0 ? '+' + num.toFixed(1) : num.toFixed(1);
+}
+
+function clsDiff(num) {
+  if (num == null) return 'neu';
+  return num > 0 ? 'pos' : num < 0 ? 'neg' : 'neu';
+}
+
+function parseTeam(team) {
+  const name = getName(team);
+  return {
+    name: name,
+    games: team.GameCount || 0,
+    avgPoints: avg(team, 'Points'),
+    avgRebound: avg(team, 'Rebound'),
+    avgDefRebound: avg(team, 'DefRebound'),
+    avgOffRebound: avg(team, 'OffRebound'),
+    avgAssist: avg(team, 'Assist'),
+    avgSteal: avg(team, 'Steal'),
+    avgBlock: avg(team, 'Blocks'),
+    avgTurnover: avg(team, 'Turnover'),
+    avgFoul: avg(team, 'Foul'),
+    avgOppFoul: avg(team, 'OpponentFoul'),
+    avgPlusMinus: avg(team, 'PlusMinus'),
+    kpi: team.KPI  || 0,
+    shot1Pct: shotPct(team, '1'),
+    shot2Pct: shotPct(team, '2'),
+    shot3Pct: shotPct(team, '3'),
+    shotOnPlay: shotOnPlay(team),
+  };
+}
+
+function isShalashTeam(team) {
+  if (team.TeamID === SHALASH_TEAM_ID) return true;
+  const name = getName(team).toLowerCase();
+  return name.includes('шал');
+}
+
+function parsePct(val) {
+  if (val == null || val === '') return null;
+  if (typeof val === 'number') return val;
+  return parseFloat(String(val).replace('%', '').replace(',', '.'));
+}
+
+function computeKpi(team) {
+  const miss = (team.Shot2 - team.Goal2) + (team.Shot3 - team.Goal3) + (team.Shot1 - team.Goal1);
+  return team.Points + team.Rebound + team.Assist + team.Steal + (team.Blocks || 0)
+    + team.OpponentFoul - miss - team.Turnover - team.Foul;
+}
+
+function shotOnPlayFromOnline(team) {
+  const totalGoals = (team.Goal2 || 0) + (team.Goal3 || 0);
+  const totalShots = (team.Shot2 || 0) + (team.Shot3 || 0);
+  if (!totalShots) return null;
+  return (totalGoals / totalShots) * 100;
+}
+
+function parseOnlineGameTeam(team, meta, plusMinus, opponentPoints) {
+  const label = `${meta.date} vs ${meta.opponent} (${meta.score})`;
+  return {
+    name: label,
+    avgPoints: team.Points,
+    avgOpponentPoints: opponentPoints,
+    avgPlusMinus: plusMinus,
+    avgRebound: team.Rebound,
+    avgDefRebound: team.DefRebound,
+    avgOffRebound: team.OffRebound,
+    avgAssist: team.Assist,
+    avgSteal: team.Steal,
+    avgBlock: team.Blocks || 0,
+    avgTurnover: team.Turnover,
+    avgFoul: team.Foul,
+    avgOppFoul: team.OpponentFoul,
+    kpi: computeKpi(team),
+    shot1Pct: parsePct(team.Shot1Percent),
+    shot2Pct: parsePct(team.Shot2Percent),
+    shot3Pct: parsePct(team.Shot3Percent),
+    shotOnPlay: shotOnPlayFromOnline(team),
+  };
+}
+
+function aggregate(allTeams) {
+  const map = new Map();
+  for (const t of allTeams) {
+    if (!map.has(t.name)) map.set(t.name, t);
+  }
+  return Array.from(map.values());
+}
+
+function sortData(teams, col, asc) {
+  return [...teams].sort((a, b) => {
+    if (col === 'name') {
+      return asc ? a.name.localeCompare(b.name, 'ru') : b.name.localeCompare(a.name, 'ru');
+    }
+    const va = a[col] == null ? -Infinity : a[col];
+    const vb = b[col] == null ? -Infinity : b[col];
+    return asc ? va - vb : vb - va;
+  });
+}
+
+function updateSortArrows(col) {
+  document.querySelectorAll('thead th.sortable').forEach(th => {
+    th.classList.toggle('active-sort', th.dataset.col === col);
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = th.dataset.col === col ? (sortAsc ? '↑' : '↓') : '⇅';
+  });
+}
+
+function rankClass(i) {
+  if (i === 0) return 'rank-1';
+  if (i === 1) return 'rank-2';
+  if (i === 2) return 'rank-3';
+  return 'rank-n';
+}
+
+function colDirection(col) {
+  // negative = fewer is better (turnovers, fouls)
+  if (col === 'avgTurnover' || col === 'avgFoul') return -1;
+  return 1; // higher is better
+}
+
+function bestWorstClass(col, val, teams) {
+  if (val == null) return '';
+  const dir = colDirection(col);
+  let best = null, worst = null;
+  for (const t of teams) {
+    const v = t[col];
+    if (v == null) continue;
+    const nv = Number(v);
+    if (isNaN(nv)) continue;
+    if (best == null || dir * nv > dir * best) best = nv;
+    if (worst == null || dir * nv < dir * worst) worst = nv;
+  }
+  if (val === best && best !== worst) return 'best-val';
+  if (val === worst && best !== worst) return 'worst-val';
+  return '';
+}
+
+function renderTable(teams) {
+  currentTeams = teams;
+  const sorted = sortData(teams, sortCol, sortAsc);
+  const tbody = document.getElementById('statsBody');
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="18" class="empty-msg">Нет данных</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sorted.map((t, i) => {
+    const cells = [
+      ['neu', t.games, null],
+      [null, t.avgPoints, 'avgPoints'],
+      [null, t.avgRebound, 'avgRebound'],
+      [null, t.avgDefRebound, 'avgDefRebound'],
+      [null, t.avgOffRebound, 'avgOffRebound'],
+      [null, t.avgAssist, 'avgAssist'],
+      [null, t.avgSteal, 'avgSteal'],
+      [null, t.avgBlock, 'avgBlock'],
+      [null, t.avgTurnover, 'avgTurnover'],
+      [null, t.avgFoul, 'avgFoul'],
+      [null, t.avgOppFoul, 'avgOppFoul'],
+      [null, t.avgPlusMinus, 'avgPlusMinus'],
+      [null, t.kpi, 'kpi'],
+      [null, t.shot1Pct, 'shot1Pct'],
+      [null, t.shot2Pct, 'shot2Pct'],
+      [null, t.shot3Pct, 'shot3Pct'],
+      [null, t.shotOnPlay, 'shotOnPlay'],
+    ];
+    const rowCells = cells.map(([baseCls, val, col]) => {
+      const extra = col ? bestWorstClass(col, val, teams) : '';
+      const cls = [baseCls, extra].filter(Boolean).join(' ');
+      return `<td class="${cls}">${col === 'kpi' ? val : (val != null ? fmt(val) : '—')}</td>`;
+    });
+    return `<tr><td><span class="rank ${rankClass(i)}">${i + 1}</span>${t.name}</td>${rowCells.join('')}</tr>`;
+  }).join('');
+
+  renderInsights(sorted);
+}
+
+function updateShalashSortArrows(col) {
+  document.querySelectorAll('#shalashTable thead th.sortable').forEach(th => {
+    th.classList.toggle('active-sort', th.dataset.col === col);
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = th.dataset.col === col ? (shalashSortAsc ? '↑' : '↓') : '⇅';
+  });
+}
+
+function renderShalashTable(games) {
+  currentShalashGames = games;
+  const sorted = sortData(games, shalashSortCol, shalashSortAsc);
+  const tbody = document.getElementById('shalashBody');
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="18" class="empty-msg">Нет данных</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sorted.map((t, i) => {
+    const cells = [
+      [null, t.avgPoints, 'avgPoints'],
+      [null, t.avgOpponentPoints, 'avgOpponentPoints'],
+      [null, t.avgPlusMinus, 'avgPlusMinus'],
+      [null, t.avgRebound, 'avgRebound'],
+      [null, t.avgDefRebound, 'avgDefRebound'],
+      [null, t.avgOffRebound, 'avgOffRebound'],
+      [null, t.avgAssist, 'avgAssist'],
+      [null, t.avgSteal, 'avgSteal'],
+      [null, t.avgBlock, 'avgBlock'],
+      [null, t.avgTurnover, 'avgTurnover'],
+      [null, t.avgFoul, 'avgFoul'],
+      [null, t.avgOppFoul, 'avgOppFoul'],
+      [null, t.kpi, 'kpi'],
+      [null, t.shot1Pct, 'shot1Pct'],
+      [null, t.shot2Pct, 'shot2Pct'],
+      [null, t.shot3Pct, 'shot3Pct'],
+      [null, t.shotOnPlay, 'shotOnPlay'],
+    ];
+    const rowCells = cells.map(([baseCls, val, col]) => {
+      const extra = col ? bestWorstClass(col, val, games) : '';
+      const cls = [baseCls, extra].filter(Boolean).join(' ');
+      const display = col === 'kpi' ? val : (val != null ? fmt(val) : '—');
+      return `<td class="${cls}">${display}</td>`;
+    });
+    return `<tr><td><span class="rank ${rankClass(i)}">${i + 1}</span>${t.name}</td>${rowCells.join('')}</tr>`;
+  }).join('');
+}
+
+function handleShalashSort(col) {
+  if (currentShalashGames.length === 0) return;
+  if (shalashSortCol === col) {
+    shalashSortAsc = !shalashSortAsc;
+  } else {
+    shalashSortCol = col;
+    shalashSortAsc = col === 'name';
+  }
+  updateShalashSortArrows(col);
+  renderShalashTable(currentShalashGames);
+}
+
+async function loadShalashGames() {
+  const tbody = document.getElementById('shalashBody');
+  const games = [];
+
+  for (const meta of SHALASH_GAMES) {
+    try {
+      const url = `${SHALASH_ONLINE_BASE}/${meta.id}?format=json&lang=ru`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const teams = data.GameTeams || [];
+      const shalash = teams.find(isShalashTeam);
+      if (!shalash) throw new Error('Команда не найдена');
+      const opponent = teams.find(t => t !== shalash);
+      const plusMinus = opponent ? shalash.Score - opponent.Score : null;
+	  const opponentPoints = opponent ? opponent.Score : null;
+      games.push(parseOnlineGameTeam(shalash, meta, plusMinus, opponentPoints));
+    } catch (e) {
+      console.warn(`Ошибка загрузки матча ШАЛАШ ${meta.id}:`, e.message);
+    }
+  }
+
+  if (games.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="18" class="empty-msg">Ошибка загрузки данных по матчам ШАЛАШ</td></tr>';
+    return;
+  }
+
+  shalashSortCol = 'name';
+  shalashSortAsc = true;
+  updateShalashSortArrows('name');
+  renderShalashTable(games);
+}
+
+function parseNumericValue(val) {
+  if (val == null || val === '' || val === '-') return null;
+  if (typeof val === 'number') return val;
+  const str = String(val).trim().replace(/%/g, '').replace(/\s/g, '').replace(',', '.');
+  if (!str) return null;
+  if (/^\d+:\d{1,2}$/.test(str)) {
+    const [minutes, seconds] = str.split(':').map(Number);
+    return minutes * 60 + seconds;
+  }
+  const num = Number(str);
+  return Number.isFinite(num) ? num : null;
+}
+
+function parsePercentValue(val) {
+  return parseNumericValue(val);
+}
+
+function pickPlayerName(player) {
+  const info = player.PersonInfo || player.Person || {};
+  const candidates = [
+    player.PersonName2,
+    player.PersonName1,
+    player.PersonName,
+    player.PlayerName,
+    player.Name,
+    player.FullName,
+    player.DisplayName,
+    info.PersonName2,
+    info.PersonName1,
+    info.PersonName,
+    info.PlayerName,
+    info.Name,
+    info.FullName,
+    info.DisplayName,
+    info.PersonFullNameRu,
+    info.PersonFullNameEn,
+    info.PersonFirstNameRu && info.PersonLastNameRu ? `${info.PersonFirstNameRu} ${info.PersonLastNameRu}`.trim() : null,
+    info.PersonFirstNameEn && info.PersonLastNameEn ? `${info.PersonFirstNameEn} ${info.PersonLastNameEn}`.trim() : null,
+  ];
+
+  for (const cand of candidates) {
+    if (typeof cand === 'string' && cand.trim()) return cand.trim();
+  }
+
+  return 'Без имени';
+}
+
+function hasPlayerStats(team) {
+  if (!team || typeof team !== 'object') return false;
+  return [team.Players, team.PlayerStats, team.PlayerStatsList, team.PlayersList, team.Stats, team.PlayerList]
+    .some(list => Array.isArray(list) || (list && typeof list === 'object' && !Array.isArray(list)));
+}
+
+function findShalashTeamFromPreview(data, shalashTeamID) {
+  const matches = [];
+
+  const visit = (value) => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+
+    const teamId = value.TeamID ?? value.TeamId ?? value.TeamIdValue ?? value.Id;
+    const teamName = value.TeamName || value.Team || value.Name || value.TeamData;
+    const nameText = typeof teamName === 'string'
+      ? teamName
+      : (teamName && (teamName.CompTeamShortNameRu || teamName.TeamName || teamName.Name)) || '';
+    const isShalash = teamId === shalashTeamID || String(nameText).toLowerCase().includes('шал');
+
+    if (isShalash && hasPlayerStats(value)) {
+      matches.push(value);
+      return;
+    }
+
+    Object.values(value).forEach(visit);
+  };
+
+  visit(data);
+  return matches[0] || null;
+}
+
+function parsePlayerStatsFromPreview(data, shalashTeamID) {
+  const team = findShalashTeamFromPreview(data, shalashTeamID);
+  if (!team) return [];
+
+  const rawPlayers = team.Players || team.PlayerStats || team.PlayerStatsList || team.PlayersList || team.Stats || team.PlayerList || [];
+  const playerList = Array.isArray(rawPlayers) ? rawPlayers : Object.values(rawPlayers || {});
+
+  return playerList
+    .filter(Boolean)
+    .map(player => ({
+      name: pickPlayerName(player),
+      games: parseNumericValue(player.GameCount) ?? parseNumericValue(player.Games) ?? parseNumericValue(player.Matches) ?? 0,
+      avgPlayedTime: parseNumericValue(player.AvgPlayedTime) ?? parseNumericValue(player.PlayedTime),
+      avgPoints: parseNumericValue(player.AvgPoints) ?? parseNumericValue(player.Points),
+      avgRebound: parseNumericValue(player.AvgRebound) ?? parseNumericValue(player.Rebound),
+      avgDefRebound: parseNumericValue(player.AvgDefRebound) ?? parseNumericValue(player.DefRebound),
+      avgOffRebound: parseNumericValue(player.AvgOffRebound) ?? parseNumericValue(player.OffRebound),
+      avgAssist: parseNumericValue(player.AvgAssist) ?? parseNumericValue(player.Assist),
+      avgSteal: parseNumericValue(player.AvgSteal) ?? parseNumericValue(player.Steal),
+      avgBlock: parseNumericValue(player.AvgBlocks) ?? parseNumericValue(player.Blocks),
+      avgTurnover: parseNumericValue(player.AvgTurnover) ?? parseNumericValue(player.Turnover),
+      avgFoul: parseNumericValue(player.AvgFoul) ?? parseNumericValue(player.Foul),
+      AvgOpponentFoul: parseNumericValue(player.AvgOpponentFoul) ?? parseNumericValue(player.OpponentFoul),
+	  avgKPI: parseNumericValue(player.AvgKPI) ?? parseNumericValue(player.KPI),
+      avgPlusMinus: parseNumericValue(player.AvgPlusMinus) ?? parseNumericValue(player.PlusMinus),
+      shot1Pct: parsePercentValue(player.Shot1Percent),
+      shot2Pct: parsePercentValue(player.Shot2Percent),
+      shot3Pct: parsePercentValue(player.Shot3Percent),
+      shotOnPlay: parsePercentValue(player.Shot23Percent),
+    }))
+    .filter(player => player.name);
+}
+
+function formatPlayedTime(value) {
+  if (value == null || value === '') return '—';
+
+  if (typeof value === 'number') {
+    const totalSeconds = Math.round(value);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  const str = String(value).trim();
+  if (!str) return '—';
+  if (/^\d+:\d{1,2}$/.test(str)) return str;
+
+  const numeric = parseNumericValue(str);
+  if (numeric == null) return str;
+
+  const minutes = Math.floor(numeric / 60);
+  const seconds = Math.round(numeric % 60);
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+async function loadPlayerStats() {
+  const tbody = document.getElementById('playersBody');
+
+  try {
+    const url = `${API_BASE}/${LAST_GAME_ID}?compId=0`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const players = parsePlayerStatsFromPreview(data, SHALASH_TEAM_ID);
+    currentPlayers = players;
+
+    if (players.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="17" class="empty-msg">Нет данных по игрокам ШАЛАШ</td></tr>';
+      return;
+    }
+
+    playersSortCol = 'name';
+    playersSortAsc = true;
+    updatePlayersSortArrows('name');
+    renderPlayersTable(players);
+  } catch (e) {
+    currentPlayers = [];
+    tbody.innerHTML = '<tr><td colspan="17" class="empty-msg">Не удалось загрузить данные по игрокам ШАЛАШ</td></tr>';
+    console.warn('Ошибка загрузки игроков ШАЛАШ:', e.message);
+  }
+}
+
+function updatePlayersSortArrows(col) {
+  document.querySelectorAll('#playersTable thead th.sortable').forEach(th => {
+    th.classList.toggle('active-sort', th.dataset.col === col);
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = th.dataset.col === col ? (playersSortAsc ? '↑' : '↓') : '⇅';
+  });
+}
+
+function renderPlayersTable(teams) {
+  const sorted = sortData(teams, playersSortCol, playersSortAsc);
+  const tbody = document.getElementById('playersBody');
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="16" class="empty-msg">Нет данных</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sorted.map((t, i) => {
+    const cells = [
+      ['neu', t.games, null],
+      [null, t.avgPlayedTime, 'avgPlayedTime'],
+      [null, t.avgPoints, 'avgPoints'],
+      [null, t.avgRebound, 'avgRebound'],
+      [null, t.avgDefRebound, 'avgDefRebound'],
+      [null, t.avgOffRebound, 'avgOffRebound'],
+      [null, t.avgAssist, 'avgAssist'],
+      [null, t.avgSteal, 'avgSteal'],
+      [null, t.avgBlock, 'avgBlock'],
+      [null, t.avgTurnover, 'avgTurnover'],
+      [null, t.avgFoul, 'avgFoul'],
+      [null, t.AvgOpponentFoul, 'AvgOpponentFoul'],
+      [null, t.avgKPI, 'avgKPI'],
+      [null, t.avgPlusMinus, 'avgPlusMinus'],
+      [null, t.shot1Pct, 'shot1Pct'],
+      [null, t.shot2Pct, 'shot2Pct'],
+      [null, t.shot3Pct, 'shot3Pct'],
+      [null, t.shotOnPlay, 'shotOnPlay'],
+    ];
+    const rowCells = cells.map(([baseCls, val, col]) => {
+      const extra = col ? bestWorstClass(col, val, teams) : '';
+      const cls = [baseCls, extra].filter(Boolean).join(' ');
+      const displayValue = col === 'avgPlayedTime' ? formatPlayedTime(val) : (val != null ? fmt(val) : '—');
+      return `<td class="${cls}">${displayValue}</td>`;
+    });
+    return `<tr><td><span class="rank ${rankClass(i)}">${i + 1}</span>${t.name}</td>${rowCells.join('')}</tr>`;
+  }).join('');
+}
+
+function handlePlayersSort(col) {
+  if (currentPlayers.length === 0) return;
+  if (playersSortCol === col) {
+    playersSortAsc = !playersSortAsc;
+  } else {
+    playersSortCol = col;
+    playersSortAsc = col === 'name';
+  }
+  updatePlayersSortArrows(col);
+  renderPlayersTable(currentPlayers);
+}
+
+function renderInsights(teams) {
+  const el = document.getElementById('insights');
+  if (teams.length === 0) { el.innerHTML = ''; return; }
+
+  const byPoints = [...teams].sort((a, b) => (b.avgPoints || 0) - (a.avgPoints || 0)).slice(0, 4);
+  const byDefense = [...teams].sort((a, b) => (b.avgSteal || 0) + (b.avgBlock || 0) - (a.avgSteal || 0) - (a.avgBlock || 0)).slice(0, 4);
+  const byAccuracy = [...teams].sort((a, b) => (b.shot1Pct || 0) - (a.shot1Pct || 0)).slice(0, 4);
+  const byKPI = [...teams].sort((a, b) => b.kpi - a.kpi).slice(0, 4);
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>🏀 Лидеры по очкам</h3>
+      <ul>${byPoints.map(t => `<li><strong>${t.name}</strong> — ${fmt(t.avgPoints)} очка/игру</li>`).join('')}</ul>
+    </div>
+    <div class="card">
+      <h3>🛡️ Лучшая защита</h3>
+      <ul>${byDefense.map(t => `<li><strong>${t.name}</strong> — ${fmt(t.avgSteal)} перехватов + ${fmt(t.avgBlock)} блокшотов</li>`).join('')}</ul>
+    </div>
+    <div class="card">
+      <h3>🎯 Точность бросков (1-очковые)</h3>
+      <ul>${byAccuracy.map(t => `<li><strong>${t.name}</strong> — ${fmtPct(t.shot1Pct)}%</li>`).join('')}</ul>
+    </div>
+    <div class="card">
+      <h3>📊 KPI команд</h3>
+      <ul>${byKPI.map(t => `<li><strong>${t.name}</strong> — ${t.kpi}</li>`).join('')}</ul>
+    </div>
+  `;
+}
+
+function handleSort(col) {
+  console.log('handleSort called:', col, 'currentTeams:', currentTeams.length, 'sortCol:', sortCol, 'sortAsc:', sortAsc);
+  if (currentTeams.length === 0) return;
+  if (sortCol === col) {
+    sortAsc = !sortAsc;
+  } else {
+    sortCol = col;
+    sortAsc = col === 'name';
+  }
+  console.log('After toggle:', sortCol, sortAsc);
+  updateSortArrows(col);
+  renderTable(currentTeams);
+}
+
+async function loadData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  setStatus('⏳ Загрузка данных...', 'loading');
+
+  const allTeams = [];
+  let errors = 0;
+
+  for (const id of GAME_IDS) {
+    try {
+      const url = `${API_BASE}/${id}?compId=0`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      let teams = [];
+      if (Array.isArray(data)) {
+        teams = data;
+      } else if (data.Teams && Array.isArray(data.Teams)) {
+        teams = data.Teams;
+      } else if (data.teams && Array.isArray(data.teams)) {
+        teams = data.teams.map(t => ({
+          TeamName: t.teamName,
+          GameCount: t.gameCount,
+          Points: t.points,
+          AvgPoints: t.averages?.points,
+          AvgRebound: t.averages?.totalRebound,
+          AvgDefRebound: t.averages?.defRebound,
+          AvgOffRebound: t.averages?.offRebound,
+          AvgAssist: t.averages?.assists,
+          AvgSteal: t.averages?.steals,
+          AvgBlocks: t.averages?.blocks,
+          AvgTurnover: t.averages?.turnovers,
+          AvgFoul: t.averages?.fouls,
+          AvgOpponentFoul: t.averages?.opponentFouls,
+          AvgPlusMinus: t.averages?.plusMinus,
+          KPI: t.kpi,
+          Shot1Percent: t.shots?.shot1 ? (t.shots.goal1 / t.shots.shot1 * 100).toFixed(1).replace('.', ',') : null,
+          Shot2Percent: t.shots?.shot2 ? (t.shots.goal2 / t.shots.shot2 * 100).toFixed(1).replace('.', ',') : null,
+          Shot3Percent: t.shots?.shot3 ? (t.shots.goal3 / t.shots.shot3 * 100).toFixed(1).replace('.', ',') : null,
+          Shot23Percent: null,
+          Shot23: t.shots?.shot23 || 0,
+          Goal23: t.shots?.goal23 || 0,
+        }));
+      }
+
+      for (const t of teams) allTeams.push(parseTeam(t));
+    } catch (e) {
+      errors++;
+      console.warn(`Ошибка загрузки игры ${id}:`, e.message);
+    }
+  }
+
+  btn.disabled = false;
+
+  if (errors === GAME_IDS.length) {
+    setStatus('❌ Не удалось загрузить данные с сервера', 'error');
+    document.getElementById('statsBody').innerHTML = '<tr><td colspan="18" class="empty-msg">Ошибка загрузки данных. Проверьте консоль браузера.</td></tr>';
+    document.getElementById('insights').innerHTML = '';
+    await loadShalashGames();
+    await loadPlayerStats();
+    return;
+  }
+
+  if (errors > 0) {
+    setStatus(`⚠️ Загружено ${allTeams.length} команд (${errors} из ${GAME_IDS.length} игр не удалось)`, 'error');
+  } else {
+    setStatus('✅ Данные загружены', 'done');
+  }
+
+  const teams = aggregate(allTeams);
+  sortCol = 'kpi';
+  sortAsc = false;
+  updateSortArrows('kpi');
+  renderTable(teams);
+  await loadShalashGames();
+  await loadPlayerStats();
+}
+
+// Загрузка при открытии
+loadData();
+
+// Сортировка по клику на заголовок
+(function() {
+  const table = document.getElementById('statsTable');
+  if (!table) { console.log('statsTable not found'); return; }
+  console.log('Attaching sort listener to table');
+  table.addEventListener('click', function(e) {
+    console.log('Table click:', e.target.tagName, e.target.className);
+    const th = e.target.closest('th.sortable');
+    console.log('Found th:', th ? th.dataset.col : 'none');
+    if (!th) return;
+    handleSort(th.dataset.col);
+  });
+})();
+
+(function() {
+  const table = document.getElementById('shalashTable');
+  if (!table) return;
+  table.addEventListener('click', function(e) {
+    const th = e.target.closest('th.sortable');
+    if (!th) return;
+    handleShalashSort(th.dataset.col);
+  });
+})();
+
+(function() {
+  const table = document.getElementById('playersTable');
+  if (!table) return;
+  table.addEventListener('click', function(e) {
+    const th = e.target.closest('th.sortable');
+    if (!th) return;
+    handlePlayersSort(th.dataset.col);
+  });
+})();
+</script>
+</body>
+</html>
